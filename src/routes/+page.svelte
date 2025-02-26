@@ -1,14 +1,19 @@
+<!-- View the DaisyUI webiste for cool components and styling: https://daisyui.com/components/button/ -->
 
+<script>
+  // You can add future logic here
+</script>
 
+<div class="flex flex-col justify-center items-center h-screen bg-gray-100">
+  <!-- Welcome Text -->
+  <h1 class="text-4xl font-bold text-gray-800 text-center">Welcome to Rankify</h1>
+  <p class="text-lg text-gray-600 text-center mt-2">
+    Create, rank, and explore tier lists with the community!
+  </p>
 
-
-
-<button class="btn">Button</button>
-<button class="btn btn-neutral">Neutral</button>
-<button class="btn btn-primary">Primary</button>
-<button class="btn btn-secondary">Secondary</button>
-<button class="btn btn-accent">Accent</button>
-<button class="btn btn-link">Link</button>
-<span class="loading loading-spinner"></span>
-
-<!-- To get more components like this: https://daisyui.com/components/button/ -->
+  <!-- Buttons -->
+  <div class="mt-6 flex space-x-4">
+    <a href="/create" class="btn btn-neutral">Create a Tier List</a>
+    <a href="/tiers" class="btn btn-neutral">View Public Tiers</a>
+  </div>
+</div>
