@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import "/src/app.css";
   import { isLoggedIn, logout } from "../lib/auth";
-  import { onMount } from "svelte";
+  import "/src/app.css";
 
   let showDropdown = false;
 
