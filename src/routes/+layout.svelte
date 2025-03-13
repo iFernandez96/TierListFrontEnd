@@ -9,29 +9,29 @@
     showDropdown = !showDropdown;
   }
 
-  //dark/light mode
   function toggleTheme(event: Event) {
     const target = event.target as HTMLInputElement;
-    const theme = target.checked ? "synthwave" : "light";
+    const theme = target.checked ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
   }
 
-  // Restore theme from localStorage on page load
+  // restore theme from local storage on page load
   onMount(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("theme") || "light";
       document.documentElement.setAttribute("data-theme", savedTheme);
-      // Ensure checkbox state matches theme
+      // Ensure checkbox state matches the dark mode (forest)
       const checkbox = document.querySelector(".theme-controller") as HTMLInputElement;
       if (checkbox) {
-        checkbox.checked = savedTheme === "synthwave";
+        checkbox.checked = savedTheme === "dark";
       }
     }
   });
 </script>
 
-<nav class="navbar bg-white shadow-md px-6 py-4 flex justify-between">
+
+<nav class="navbar bg-white shadow-md px-6 py-4 flex justify-between sticky top-0 z-50">
   <div class="flex items-center space-x-6">
     <a href="/" class="hover:opacity-80 transition">
       <img src="/rankify_logo.png" alt="Rankify Logo" class="h-16">
@@ -40,8 +40,7 @@
     {#if $isLoggedIn}
       <div class="flex space-x-2">
         <a href="/dashboard" class="text-neutral text-lg px-3 hover:text-green-500 focus:outline-none">Dashboard</a>
-        <a href="/forum" class="text-neutral text-lg px-3 hover:text-green-500 focus:outline-none">Forum</a>
-        <a href="/leaderboard" class="text-neutral text-lg px-3 hover:text-green-500 focus:outline-none">Leaderboard</a>
+        <a href="/featured" class="text-neutral text-lg px-3 hover:text-green-500 focus:outline-none">Featured</a>
       </div>
     {/if}
   </div>
