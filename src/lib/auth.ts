@@ -2,35 +2,46 @@ import { writable } from "svelte/store";
 import { goto } from "$app/navigation";
 
 export const isLoggedIn = writable(false);
-export const user = writable<{ username: string } | null>(null);
+export const user = writable<{ firstName: string; lastName: string; username: string } | null>(null);
 
-// hardcoded for demo purposes
-const HARDCODED_USER = {
-  username: "TestUser",
-  password: "TestPassword"
-};
+export async function login(username: string, password: string): Promise<boolean> {
+  try {
+    const response = await fetch("http://localhost:8080/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username, password })
+    });
 
-export function login(username: string, password: string): boolean {
-  if (username === HARDCODED_USER.username && password === HARDCODED_USER.password) {
-    user.set({ username });
-    isLoggedIn.set(true);
-    sessionStorage.setItem("isLoggedIn", "true");
-    sessionStorage.setItem("username", username);
-    return true;
+    if (response.ok) {
+      const userData = await response.json();
+      user.set(userData);
+      isLoggedIn.set(true);
+      sessionStorage.setItem("isLoggedIn", "true");
+      sessionStorage.setItem("user", JSON.stringify(userData));
+      goto("/dashboard"); // Redirect after login
+      return true;
+    } else {
+      return false; // Login failed
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    return false;
   }
-  return false;
 }
 
 export function logout(): void {
   user.set(null);
   isLoggedIn.set(false);
   sessionStorage.removeItem("isLoggedIn");
-  sessionStorage.removeItem("username");
-  goto("/"); // redirect to home page after logout
+  sessionStorage.removeItem("user");
+  goto("/"); // Redirect to home page after logout
 }
 
-// restoring session
 if (typeof window !== "undefined" && sessionStorage.getItem("isLoggedIn") === "true") {
-  user.set({ username: sessionStorage.getItem("username") || "" });
-  isLoggedIn.set(true);
+  const storedUser = sessionStorage.getItem("user");
+  if (storedUser) {
+    user.set(JSON.parse(storedUser));
+    isLoggedIn.set(true);
+  }
 }
