@@ -7,14 +7,27 @@
   let password = "";
   let errorMessage = "";
 
-  function handleLogin(event: Event) {
+  async function handleLogin(event: Event) {
     event.preventDefault();
-    const success = login(username, password);
 
-    if (success) {
-      goto("/dashboard");
-    } else {
-      errorMessage = "Invalid username or password";
+    try {
+      const response = await fetch("http://localhost:8080/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: "include", // Ensures cookies/session handling
+        body: JSON.stringify({ username, password })
+      });
+
+      if (response.ok) {
+        goto("/dashboard"); // Redirect only if login is successful
+      } else {
+        const errorText = await response.text();
+        errorMessage = errorText || "Login failed. Please check your credentials.";
+      }
+    } catch (error) {
+      errorMessage = "Server error. Please try again later.";
     }
   }
 
@@ -34,7 +47,6 @@
     <p class="text-center text-base-content mt-1">Welcome back! Please enter your details.</p>
 
     <form class="space-y-6 mt-4" on:submit={handleLogin}>
-      
       <div>
         <label for="username" class="block text-base-content font-medium">Username</label>
         <input 
