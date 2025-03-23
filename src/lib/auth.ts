@@ -6,7 +6,7 @@ export const user = writable<{ firstName: string; lastName: string; username: st
 
 export async function login(username: string, password: string): Promise<boolean> {
   try {
-    const response = await fetch("http://localhost:8080/api/auth/login", {
+    const response = await fetch("https://project2db-b60469abc86b.herokuapp.com/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
