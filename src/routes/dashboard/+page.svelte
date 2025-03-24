@@ -43,8 +43,12 @@
 
 <div class="container mx-auto p-6">
   <h1 class="text-3xl font-bold text-base-content">
-    Welcome, {$user?.username}!
-  </h1>
+    {#if $user}
+      Welcome, {$user.firstName}!
+    {:else}
+      Welcome!
+    {/if}
+  </h1>  
   <p class="text-gray-600 text-base-content">
     Rankify Dashboard
   </p>
