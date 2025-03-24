@@ -10,28 +10,10 @@
   async function handleLogin(event: Event) {
     event.preventDefault();
 
-    try {
-      const response = await fetch(
-        "https://project2db-b60469abc86b.herokuapp.com/api/auth/login",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include", // Ensures cookies/session handling
-          body: JSON.stringify({ username, password }),
-        },
-      );
+    const success = await login(username, password); // call the store-based login function
 
-      if (response.ok) {
-        goto("/dashboard"); // Redirect only if login is successful
-      } else {
-        const errorText = await response.text();
-        errorMessage =
-          errorText || "Login failed. Please check your credentials.";
-      }
-    } catch (error) {
-      errorMessage = "Server error. Please try again later.";
+    if (!success) {
+      errorMessage = "Login failed. Please check your credentials.";
     }
   }
 
@@ -118,3 +100,4 @@
     </form>
   </div>
 </div>
+
