@@ -1,6 +1,7 @@
 <script lang="ts">
+  import "../lib/auth"; // ✅ triggers store logic on app load
   import { onMount } from "svelte";
-  import { isLoggedIn, logout } from "../lib/auth";
+  import { isLoggedIn, logout, user } from "../lib/auth"; // 👈 added `user`
   import "/src/app.css";
 
   let showDropdown = false;
@@ -16,12 +17,14 @@
     localStorage.setItem("theme", theme);
   }
 
+  user.subscribe(val => console.log("👤 User Store:", val)); // ✅ Correct
+  isLoggedIn.subscribe(val => console.log("🔐 isLoggedIn:", val)); // ✅
+
   // restore theme from local storage on page load
   onMount(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("theme") || "light";
       document.documentElement.setAttribute("data-theme", savedTheme);
-      // Ensure checkbox state matches the dark mode (forest)
       const checkbox = document.querySelector(".theme-controller") as HTMLInputElement;
       if (checkbox) {
         checkbox.checked = savedTheme === "dark";
@@ -29,7 +32,6 @@
     }
   });
 </script>
-
 
 <nav class="navbar bg-white shadow-md px-6 py-4 flex justify-between sticky top-0 z-50">
   <div class="flex items-center space-x-6">
@@ -47,14 +49,27 @@
 
   <div class="relative dropdown-container">
     {#if $isLoggedIn}
-      <div class="avatar cursor-pointer" on:click={toggleDropdown}>
-        <div class="w-12 h-12 rounded-full ring ring-green-500 ring-offset-2">
-          <img src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" alt="User Avatar" />
+      <div class="flex items-center space-x-2 cursor-pointer" on:click={toggleDropdown}>
+        {#if $user}
+          <span class="text-base text-neutral font-medium hidden md:inline">
+            {$user.firstName}
+          </span>
+        {/if}
+        <div class="avatar">
+          <div class="w-12 h-12 rounded-full ring ring-green-500 ring-offset-2">
+            <img src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" alt="User Avatar" />
+          </div>
         </div>
       </div>
 
       {#if showDropdown}
-        <div class="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg">
+        <div class="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-50">
+          <div class="px-4 py-2 text-sm text-gray-500 border-b">
+            {#if $user}
+              Signed in as<br />
+              <span class="font-semibold text-black">{$user.firstName}</span>
+            {/if}
+          </div>
           <a href="/profile" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Edit Profile</a>
           <button on:click={logout} class="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100">Sign Out</button>
         </div>
@@ -67,6 +82,7 @@
 
 <slot />
 
+<!-- Theme Switcher -->
 <div class="fixed bottom-5 right-5">
   <label class="swap swap-rotate">
     <input type="checkbox" class="theme-controller" on:change={toggleTheme} />
