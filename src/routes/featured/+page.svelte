@@ -1,16 +1,35 @@
 <script lang="ts">
+  import { user } from '$lib/auth';
+  import { get } from 'svelte/store';
   import { onMount } from "svelte";
   import { v4 as uuid } from "uuid";
   import tippy from '$lib/actions/tippy.svelte';
   import { X } from 'lucide-svelte';
-  import { defaultTiers, getBase64, type Tier } from './utils';
-  import { crossfade, scale } from 'svelte/transition';
-  import { cubicInOut } from 'svelte/easing';
-  import { flip } from 'svelte/animate';
+  import { defaultTiers } from './utils';
 
   let searchQuery = "";
   let searchResults: string[] = [];
   let unassignedItems: { id: string; label: string }[] = [];
+  let TIER_ID = 1;
+  let currentTier: { tier_id: number; subject: string; start_time: string; end_time: string } | null = null;
+  let isTierListWeek = true;
+  let hasSubmitted = false;
+  let showEditor = false;
+  let nextSubmissionDate = "";
+  let pageReady = false;
+
+
+  type TierEntry = {
+    entry: string;
+    tier: number;
+  };
+
+  type TierCategory = {
+    tier_id: number;
+    subject: string;
+    start_time: string;
+    end_time: string;
+  };
 
   let tiers = [
     { id: "S", label: "S", color: "#ef4444", items: [] as { id: string, label: string}[] },
@@ -40,6 +59,51 @@
     const minutes = Math.floor((diff / (1000 * 60)) % 60);
     const seconds = Math.floor((diff / 1000) % 60);
     timer = `${days}d ${hours}h ${minutes}m ${seconds}s left`;
+  }
+
+  async function fetchTimer() {
+    const res = await fetch("https://project2db-b60469abc86b.herokuapp.com/timer");
+    const data = await res.json();
+    endTime = new Date(data.endOfWeek);
+    const nextStart = new Date(data.startOfWeek);
+    nextStart.setDate(nextStart.getDate() + 7);
+    nextSubmissionDate = nextStart.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+    updateTimer();
+  }
+
+  async function fetchMode() {
+    const res = await fetch("https://project2db-b60469abc86b.herokuapp.com/api/mode");
+
+    const data = await res.text();
+    isTierListWeek = data === "TierListWeek";
+  }
+
+  async function fetchUserEntriesThisWeek(userId: number) {
+    if (!TIER_ID) return;
+    const res = await fetch(`https://project2db-b60469abc86b.herokuapp.com/api/entries/user/${userId}/tier/${TIER_ID}`);
+    const entries = await res.json();
+
+    if (entries.length > 0) {
+      hasSubmitted = true;
+      loadSavedEntries(entries);
+    }
+  }
+
+  function loadSavedEntries(entries: TierEntry[]) {
+    tiers = tiers.map(tier => ({ ...tier, items: [] }));
+    unassignedItems = [];
+
+    for (const entry of entries) {
+      const label = entry.entry;
+      const tierIndex = entry.tier;
+      const id = uuid();
+
+      if (tierIndex >= 0 && tierIndex < tiers.length) {
+        tiers[tierIndex].items.push({ id, label });
+      } else {
+        unassignedItems.push({ id, label });
+      }
+    }
   }
 
   function handleSearch() {
@@ -100,21 +164,108 @@
     tiers = tiers.map(t => ({ ...t, items: [] }));
   }
 
-  function autoSaveTierList() {
-    const fullList = {
-      tiers,
-      unassigned: unassignedItems
-    };
-    console.log("Auto-saving:", fullList);
+  async function submitTierList() {
+    const currentUser = get(user);
+    console.log("🔐 Current user:", currentUser);
+
+    if (!currentUser) {
+      alert("You must be logged in to submit.");
+      return;
+    }
+
+    const userId = currentUser.id;
+    console.log("🗑 Deleting old entries for user:", userId, "Tier ID:", TIER_ID);
+
+    await fetch(`https://project2db-b60469abc86b.herokuapp.com/api/entries/user/${userId}/tier/${TIER_ID}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
+
+    const entries = tiers.flatMap((tier, index) =>
+      tier.items.map(item => ({
+        user_id: userId,
+        tier_id: TIER_ID,
+        entry: item.label,
+        tier: index
+      }))
+    );
+
+    console.log("📦 Submitting new entries:", entries);
+
+    try {
+      await Promise.all(
+        entries.map((entry, i) => {
+          console.log(`➡️ [${i + 1}/${entries.length}] Posting entry:`, entry);
+          return fetch("https://project2db-b60469abc86b.herokuapp.com/api/entries", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(entry)
+          });
+        })
+      );
+      console.log("✅ All entries submitted successfully!");
+      alert("Tier list submitted successfully!");
+    } catch (error) {
+      console.error("❌ Failed to submit one or more entries:", error);
+      alert("There was an error submitting your tier list.");
+    }
   }
+
+
+  async function fetchCurrentTier() {
+    const res = await fetch("https://project2db-b60469abc86b.herokuapp.com/api/tiers/all");
+    const allTiers: TierCategory[] = await res.json();
+    const now = new Date();
+
+    currentTier = allTiers.find((tier: TierCategory) => {
+      const start = new Date(tier.start_time);
+      const end = new Date(tier.end_time);
+      return now >= start && now <= end;
+    }) || null;
+
+    if (currentTier) {
+      TIER_ID = currentTier.tier_id;
+      endTime = new Date(currentTier.end_time);
+    }
+  }
+
+  async function loadPageData() {
+    const currentUser = get(user);
+    if (!currentUser) return;
+
+    try {
+      // 1. Fetch tier and timer data FIRST (in sequence)
+      await fetchCurrentTier();
+      await fetchTimer();
+
+      // 2. Only fetch mode and user entries if currentTier exists
+      if (currentTier) {
+        TIER_ID = currentTier.tier_id;
+
+        await fetchMode();
+        isTierListWeek = true; // <- FOR DEMO: force it to always show editor COMMENT OUT IN PRODUCTION
+        await fetchUserEntriesThisWeek(currentUser.id);
+      } else {
+        console.warn("No current tier category available.");
+      }
+    } catch (error) {
+      console.error("Failed to load page data:", error);
+    }
+    pageReady = true;
+  }
+
 
   onMount(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("theme") || "light";
       document.documentElement.setAttribute("data-theme", savedTheme);
     }
+
     updateTimer();
     timerInterval = setInterval(updateTimer, 1000);
+
+    loadPageData(); // load all necessary data after mount
   });
 </script>
 
@@ -165,104 +316,139 @@
   </div>
 {/snippet}
 
-<div class="container mx-auto max-w-5xl p-6">
-  <div class="flex items-center mb-1">
-    <h1 class="text-3xl font-bold text-base-content">
-      Featured Tier List: <span class="text-stone-400">Movies</span>
-    </h1>
-    <span class="ml-4 text-xl font-semibold text-green-500 whitespace-nowrap">{timer}</span>
+{#if !pageReady}
+  <div class="text-center mt-12 text-base-content text-xl">Loading...</div>
+
+{:else if !isTierListWeek}
+  <div class="text-center mt-12 space-y-4">
+    {#if hasSubmitted}
+      <p class="text-3xl font-semibold text-success">
+        You already submitted your tier list! 🎉
+      </p>
+      <button class="btn btn-outline btn-success" on:click={() => showEditor = true}>
+        Edit Submission
+      </button>
+    {:else}
+      <p class="text-3xl font-medium text-error">
+        You've missed the submission window 😢 Come back on {nextSubmissionDate}!
+      </p>
+    {/if}
   </div>
-  <p class="text-gray-600 text-base-content mt-2">
-    Create and edit your weekly tier list until the timer runs out.
-  </p>
-
-  <!-- Tier List UI -->
-  <div class="mt-8 space-y-4">
-    {#each tiers as tier (tier.id)}
-      <div class="flex items-center bg-base-200 rounded-lg shadow">
-        <div class="w-20 h-16 flex items-center justify-center font-bold text-white rounded-l text-lg" style="background-color: {tier.color}">
-          {tier.label}
-        </div>
-        <div class="flex-1 flex flex-wrap gap-2 px-4 py-3">
-          {#each tier.items as item (item.id)}
-          <button
-            type="button"
-            class="badge badge-outline p-3 cursor-pointer"
-            use:tippy={() => ({
-              content: `Remove from tier`,
-              trigger: 'click',
-              onShown(instance) {
-                setTimeout(() => instance.hide(), 1000);
-              }
-            })}
-            on:click={() => removeFromTier(tier.id, item)}
-          >
-            {item.label} <X class="w-3 h-3 ml-1" />
-          </button>        
-          {/each}
-        </div>
-      </div>
-    {/each}
-  </div>  
-
-  <div class="mt-8">
-    <div class="flex items-center justify-between mb-2">
-      <h2 class="text-xl font-semibold text-green-500">Unassigned Items</h2>
-      <input
-        type="text"
-        bind:value={searchQuery}
-        on:input={handleSearch}
-        on:keypress={(e) => e.key === 'Enter' && searchResults.length > 0 && addItem(searchResults[0])}
-        placeholder="Search items"
-        class="input input-bordered max-w-md bg-base-100 text-base-content"
-        list="search-results"
-      />
-      <datalist id="search-results">
-        {#each searchResults as result}
-          <option value={result}></option>
-        {/each}
-      </datalist>
+{:else if !currentTier}
+  <div class="text-center mt-12 space-y-4">
+    <p class="text-2xl font-medium text-error">No tier list is currently available.</p>
+  </div>
+{:else if hasSubmitted && !showEditor}
+  <div class="text-center mt-12 space-y-4">
+    <p class="text-2xl font-semibold text-warning">
+      You already completed this week's tier list. Want to change it?
+    </p>
+    <button class="btn btn-primary" on:click={() => showEditor = true}>
+      Edit My Submission
+    </button>
+  </div>
+{:else}
+  <!-- Normal tier list creation UI -->
+  <div class="container mx-auto max-w-5xl p-6">
+    <div class="flex items-center mb-1">
+      <h1 class="text-3xl font-bold text-base-content">
+        Featured Tier List: <span class="text-stone-400">{currentTier.subject}</span>
+      </h1>
+      <span class="ml-4 text-xl font-semibold text-green-500 whitespace-nowrap">{timer}</span>
     </div>
-    <div class="flex flex-wrap gap-2">
-      {#each unassignedItems as item (item.id)}
-        <div class="item-outer">
-          <div class="item">
-            <div
-              class="badge badge-soft badge-success cursor-pointer text-2xl p-6"
+    <p class="text-gray-600 text-base-content mt-2">
+      Create and edit your weekly tier list until the timer runs out.
+    </p>
+
+    <!-- Tier List UI (unchanged from yours, not re-pasted here for brevity) -->
+    <!-- ... -->
+    <div class="mt-8 space-y-4">
+      {#each tiers as tier (tier.id)}
+        <div class="flex items-center bg-base-200 rounded-lg shadow">
+          <div class="w-20 h-16 flex items-center justify-center font-bold text-white rounded-l text-lg" style="background-color: {tier.color}">
+            {tier.label}
+          </div>
+          <div class="flex-1 flex flex-wrap gap-2 px-4 py-3">
+            {#each tier.items as item (item.id)}
+            <button
+              type="button"
+              class="badge badge-outline p-3 cursor-pointer"
               use:tippy={() => ({
-                content: document.getElementById(`tiers-for-${item.id}`) || undefined,
-                onMount: () => {
-                  const el = document.getElementById(`tiers-for-${item.id}`);
-                  if (el) el.style.display = 'flex';
-                },
+                content: `Remove from tier`,
                 trigger: 'click',
-                interactive: true,
-                placement: 'bottom'
+                onShown(instance) {
+                  setTimeout(() => instance.hide(), 1000);
+                }
               })}
+              on:click={() => removeFromTier(tier.id, item)}
             >
-              {item.label}
-            </div>
-            <div class="item-tiers" style="display: none" id={`tiers-for-${item.id}`}>
-              {#each tiers as tier}
-                <button class="tier" style="background-color: {tier.color}" on:click={() => assignToTier(item, tier.id)}>
-                  {tier.label}
-                </button>
-              {/each}
-              <button class="tier remove" on:click={() => removeItem(item)}>
-                <X />
-              </button>
-            </div>
+              {item.label} <X class="w-3 h-3 ml-1" />
+            </button>        
+            {/each}
           </div>
         </div>
       {/each}
-    </div>       
-  </div>
+    </div>
 
-  <div class="mt-6 flex space-x-4">
-    <button on:click={resetTierList} class="btn btn-outline btn-warning">Reset Tier List</button>
-    <button class="btn btn-success" on:click={autoSaveTierList}>Submit Tier List</button>
+    <div class="mt-8">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-xl font-semibold text-green-500">Unassigned Items</h2>
+        <input
+          type="text"
+          bind:value={searchQuery}
+          on:input={handleSearch}
+          on:keypress={(e) => e.key === 'Enter' && searchResults.length > 0 && addItem(searchResults[0])}
+          placeholder="Search items"
+          class="input input-bordered max-w-md bg-base-100 text-base-content"
+          list="search-results"
+        />
+        <datalist id="search-results">
+          {#each searchResults as result}
+            <option value={result}></option>
+          {/each}
+        </datalist>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {#each unassignedItems as item (item.id)}
+          <div class="item-outer">
+            <div class="item">
+              <div
+                class="badge badge-soft badge-success cursor-pointer text-2xl p-6"
+                use:tippy={() => ({
+                  content: document.getElementById(`tiers-for-${item.id}`) || undefined,
+                  onMount: () => {
+                    const el = document.getElementById(`tiers-for-${item.id}`);
+                    if (el) el.style.display = 'flex';
+                  },
+                  trigger: 'click',
+                  interactive: true,
+                  placement: 'bottom'
+                })}
+              >
+                {item.label}
+              </div>
+              <div class="item-tiers" style="display: none" id={`tiers-for-${item.id}`}>
+                {#each tiers as tier}
+                  <button class="tier" style="background-color: {tier.color}" on:click={() => assignToTier(item, tier.id)}>
+                    {tier.label}
+                  </button>
+                {/each}
+                <button class="tier remove" on:click={() => removeItem(item)}>
+                  <X />
+                </button>
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>       
+    </div>
+  
+    <div class="mt-6 flex space-x-4">
+      <button on:click={resetTierList} class="btn btn-outline btn-warning">Reset Tier List</button>
+      <button class="btn btn-success" on:click={submitTierList}>Submit Tier List</button>
+    </div>
   </div>
-</div>
+{/if}
 
 <style lang="scss">
   // Global box-sizing for consistency
