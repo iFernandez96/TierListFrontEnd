@@ -72,7 +72,8 @@
   }
 
   async function fetchMode() {
-    const res = await fetch("https://project2db-b60469abc86b.herokuapp.com/api/mode"); // or correct route if it exists
+    const res = await fetch("https://project2db-b60469abc86b.herokuapp.com/api/mode");
+
     const data = await res.text();
     isTierListWeek = data === "TierListWeek";
   }
@@ -165,17 +166,19 @@
 
   async function submitTierList() {
     const currentUser = get(user);
-    console.log("Submitting with:", currentUser); // ✅ Add this line here
-    
+    console.log("🔐 Current user:", currentUser);
+
     if (!currentUser) {
       alert("You must be logged in to submit.");
       return;
     }
 
     const userId = currentUser.id;
+    console.log("🗑 Deleting old entries for user:", userId, "Tier ID:", TIER_ID);
 
     await fetch(`https://project2db-b60469abc86b.herokuapp.com/api/entries/user/${userId}/tier/${TIER_ID}`, {
-      method: "DELETE"
+      method: "DELETE",
+      credentials: "include"
     });
 
     const entries = tiers.flatMap((tier, index) =>
@@ -183,30 +186,35 @@
         user_id: userId,
         tier_id: TIER_ID,
         entry: item.label,
-        tier: index 
+        tier: index
       }))
     );
 
+    console.log("📦 Submitting new entries:", entries);
 
     try {
       await Promise.all(
-        entries.map(entry =>
-          fetch("https://project2db-b60469abc86b.herokuapp.com/api/entries", {
+        entries.map((entry, i) => {
+          console.log(`➡️ [${i + 1}/${entries.length}] Posting entry:`, entry);
+          return fetch("https://project2db-b60469abc86b.herokuapp.com/api/entries", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify(entry)
-          })
-        )
+          });
+        })
       );
+      console.log("✅ All entries submitted successfully!");
       alert("Tier list submitted successfully!");
     } catch (error) {
-      console.error("Failed to submit:", error);
+      console.error("❌ Failed to submit one or more entries:", error);
       alert("There was an error submitting your tier list.");
     }
   }
 
+
   async function fetchCurrentTier() {
-    const res = await fetch("https://project2db-b60469abc86b.herokuapp.com/api/tiers");
+    const res = await fetch("https://project2db-b60469abc86b.herokuapp.com/api/tiers/all");
     const allTiers: TierCategory[] = await res.json();
     const now = new Date();
 
