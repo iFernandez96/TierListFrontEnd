@@ -118,7 +118,7 @@
 
     // Connect to WebSocket with topic and group parameters
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsHost = window.location.host;
+    const wsHost = "https://project2db-b60469abc86b.herokuapp.com/api/auth";
     const wsUrl = `${wsProtocol}//${wsHost}/ws?topic=${encodeURIComponent(topic)}&groupId=${encodeURIComponent(group)}`;
 
     console.log("Connecting to WebSocket:", wsUrl);
