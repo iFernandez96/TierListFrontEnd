@@ -17,9 +17,6 @@
     localStorage.setItem("theme", theme);
   }
 
-  user.subscribe(val => console.log("👤 User Store:", val)); // ✅ Correct
-  isLoggedIn.subscribe(val => console.log("🔐 isLoggedIn:", val)); // ✅
-
   // restore theme from local storage on page load
   onMount(() => {
     if (typeof window !== "undefined") {
@@ -49,7 +46,7 @@
 
   <div class="relative dropdown-container">
     {#if $isLoggedIn}
-      <div class="flex items-center space-x-2 cursor-pointer" on:click={toggleDropdown}>
+      <div class="flex items-center space-x-5 cursor-pointer" on:click={toggleDropdown}>
         {#if $user}
           <span class="text-base text-neutral font-medium hidden md:inline">
             {$user.firstName}
