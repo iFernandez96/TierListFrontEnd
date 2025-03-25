@@ -2,7 +2,13 @@ import { writable } from "svelte/store";
 import { goto } from "$app/navigation";
 
 export const isLoggedIn = writable(false);
-export const user = writable<{ firstName: string; lastName: string; username: string } | null>(null);
+export const user = writable<{
+  id: number;
+  firstName: string;
+  lastName: string;
+  username: string;
+  email?: string;
+} | null>(null);
 
 const API = "https://project2db-b60469abc86b.herokuapp.com/api/auth";
 
